@@ -55,6 +55,9 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+
+      
+
       # Copy docker-compose to server
       - name: Copy Config
         uses: appleboy/scp-action@v0.1.7
@@ -67,9 +70,7 @@ jobs:
           strip_components: 0
           overwrite: true
 
-      - name: Test SSH
-        run: |
-          ssh -vvv -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} -p ${{ secrets.SSH_PORT }} "echo connected"
+      
 
 
       # SSH and Run
