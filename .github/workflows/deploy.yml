@@ -67,6 +67,11 @@ jobs:
           strip_components: 0
           overwrite: true
 
+      - name: Test SSH
+        run: |
+          ssh -vvv -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} -p ${{ secrets.SSH_PORT }} "echo connected"
+
+
       # SSH and Run
       - name: Deploy
         uses: appleboy/ssh-action@v1.0.3
