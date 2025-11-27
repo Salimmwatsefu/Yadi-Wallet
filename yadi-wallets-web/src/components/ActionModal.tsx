@@ -1,6 +1,6 @@
 import React from 'react';
 import { X, Loader2 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 
 interface ActionModalProps {
   isOpen: boolean;
@@ -10,10 +10,11 @@ interface ActionModalProps {
   isLoading?: boolean;
   onSubmit: (e: React.FormEvent) => void;
   actionLabel: string;
+  footer?: React.ReactNode; 
 }
 
 const ActionModal: React.FC<ActionModalProps> = ({ 
-    isOpen, onClose, title, children, isLoading, onSubmit, actionLabel 
+    isOpen, onClose, title, children, isLoading, onSubmit, actionLabel, footer 
 }) => {
   if (!isOpen) return null;
 
@@ -28,10 +29,10 @@ const ActionModal: React.FC<ActionModalProps> = ({
         <motion.div 
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            className="relative w-full max-w-sm glass-card bg-[#050505] border border-white/10 shadow-2xl overflow-hidden"
+            className="relative w-full max-w-md glass-card bg-[#050505] border border-white/10 shadow-2xl overflow-hidden"
         >
             {/* Header */}
-            <div className="p-6 border-b border-white/10 flex justify-between items-center">
+            <div className="p-6 border-b border-white/10 flex justify-between items-center bg-white/5">
                 <h3 className="font-heading font-bold text-white text-xl">{title}</h3>
                 <button onClick={onClose} className="p-2 rounded-full hover:bg-white/10 text-zinc-500 hover:text-white transition-colors">
                     <X className="w-5 h-5" />
@@ -40,8 +41,14 @@ const ActionModal: React.FC<ActionModalProps> = ({
 
             {/* Body */}
             <div className="p-6">
-                <form onSubmit={onSubmit} className="space-y-8">
+                <form onSubmit={onSubmit} className="space-y-6">
                     {children}
+
+                    {footer && (
+                        <div className="bg-white/5 p-4 rounded-xl border border-white/5 text-sm text-zinc-400">
+                            {footer}
+                        </div>
+                    )}
 
                     <button 
                         disabled={isLoading}
