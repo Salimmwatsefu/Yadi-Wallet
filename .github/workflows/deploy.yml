@@ -7,7 +7,7 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: salimmwatsefu/yadi-wallet
-  DOPPLER_PROJECT: yadi-wallets 
+  DOPPLER_PROJECT: yadi-wallet
   DOPPLER_CONFIG: prd          
 
 jobs:
