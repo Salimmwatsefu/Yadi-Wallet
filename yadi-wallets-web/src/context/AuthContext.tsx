@@ -5,6 +5,7 @@ interface User {
   id: string;
   username: string;
   email: string;
+  phone_number?: string;
   theme_preference: string;
   is_kyc_verified: boolean;
 }
