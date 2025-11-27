@@ -96,3 +96,11 @@ jobs:
             
             # Cleanup old images
             docker system prune -f
+
+
+      - name: Cleanup orphan processes
+        run: |
+          echo "Cleaning up any lingering SSH/SCP processes..."
+          pkill -9 ssh || true
+          pkill -9 scp || true
+          pkill -9 sftp-server || true
