@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.utils.html import format_html
 from .models import User
 
@@ -10,24 +11,38 @@ def approve_kyc(modeladmin, request, queryset):
 def reject_kyc(modeladmin, request, queryset):
     queryset.update(is_kyc_verified=False, kyc_rejection_reason="Documents unclear. Please re-upload.")
 
-class UserAdmin(admin.ModelAdmin):
-    list_display = ('email', 'username', 'is_kyc_verified', 'id_preview', 'date_joined')
-    list_filter = ('is_kyc_verified',)
-    search_fields = ('email', 'national_id_number')
+class UserAdmin(BaseUserAdmin):
+    # Columns to show in the list view
+    list_display = ('username', 'email', 'phone_number', 'is_kyc_verified', 'commission_rate', 'id_preview')
+    list_filter = ('is_kyc_verified', 'is_staff', 'is_active')
+    search_fields = ('username', 'email', 'phone_number', 'national_id_number')
     actions = [approve_kyc, reject_kyc]
-    
-    # --- FIXED FIELDSETS (Removed Password) ---
+
+    # Organize the Edit Form
     fieldsets = (
-        ('Identity', {'fields': ('email', 'username', 'phone_number')}),
-        ('KYC Documents', {'fields': ('national_id_number', 'kra_pin', 'id_front_image', 'id_back_image', 'is_kyc_verified')}),
-        ('Permissions', {'fields': ('is_active', 'is_staff', 'is_superuser')}),
+        ('Identity', {'fields': ('username', 'password')}),
+        ('Personal Info', {'fields': ('first_name', 'last_name', 'email', 'phone_number')}),
+        ('Wallet Settings', {'fields': ('commission_rate', 'theme_preference')}),
+        ('KYC & Compliance', {
+            'fields': (
+                'is_kyc_verified', 
+                'kyc_rejection_reason',
+                'national_id_number', 
+                'kra_pin', 
+                'id_front_image', 
+                'id_back_image'
+            ),
+            'classes': ('collapse',), # Collapsed by default to save space
+        }),
+        ('Permissions', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
+        ('Important Dates', {'fields': ('last_login', 'date_joined')}),
     )
-    # ------------------------------------------
 
     def id_preview(self, obj):
         if obj.id_front_image:
-            return format_html('<img src="{}" style="width: 50px; height: 30px; object-fit: cover; border-radius: 4px;" />', obj.id_front_image.url)
+            return format_html('<a href="{}" target="_blank">View ID</a>', obj.id_front_image.url)
         return "-"
-    id_preview.short_description = "ID Doc"
+    id_preview.short_description = "KYC Doc"
 
+# Unregister existing/default User if necessary, then register ours
 admin.site.register(User, UserAdmin)

@@ -1,144 +1,235 @@
-import uuid
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import permissions, status
-from django.db import transaction
 from decimal import Decimal
+from django.db.models import Sum, Q
 from .models import Wallet, LedgerEntry, Transaction
-from .services import LedgerService
+from .services import LedgerService, FeeService
 from integrations.mpesa import MpesaGateway
-from django.db.models import Sum
+from users.models import User
+import uuid
 
+# --- 1. WALLET MANAGEMENT (Create & List) ---
+class WalletManagementView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        """Returns grouped wallets: 'business' and 'personal'"""
+        wallets = Wallet.objects.filter(owner=request.user)
+        
+        business = wallets.filter(wallet_type=Wallet.Type.ORGANIZER)
+        personal = wallets.filter(wallet_type=Wallet.Type.CUSTOMER)
+
+        def serialize(qs):
+            return [{
+                "id": str(w.id), 
+                "label": w.label, 
+                "balance": w.balance, 
+                "currency": w.currency.code,
+                "is_primary": w.is_primary,
+                "is_frozen": w.is_frozen
+            } for w in qs]
+
+        return Response({
+            "business_wallets": serialize(business),
+            "personal_wallets": serialize(personal)
+        })
+
+    def post(self, request):
+        """Create a new Custom Goal Wallet (Personal Only)"""
+        label = request.data.get('label', 'New Wallet')
+        
+        # Get default currency (KES)
+        currency = Wallet.objects.filter(wallet_type=Wallet.Type.MASTER_LIQUIDITY).first().currency
+
+        # Limit: Max 5 personal wallets to prevent spam
+        if Wallet.objects.filter(owner=request.user, wallet_type=Wallet.Type.CUSTOMER).count() >= 5:
+            return Response({"error": "Wallet limit reached (Max 5)"}, status=400)
+
+        wallet = Wallet.objects.create(
+            owner=request.user,
+            wallet_type=Wallet.Type.CUSTOMER,
+            label=label,
+            currency=currency
+        )
+        return Response({
+            "status": "created", 
+            "id": str(wallet.id), 
+            "label": wallet.label,
+            "balance": 0.00
+        }, status=201)
+
+# --- 2. TRANSFER FUNDS (Inter-Wallet & P2P) ---
+class TransferFundsView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        source_id = request.data.get('source_wallet_id')
+        dest_id = request.data.get('dest_wallet_id') # Used for Internal
+        recipient_id = request.data.get('recipient_identifier') # Used for P2P
+        amount = Decimal(request.data.get('amount', '0'))
+
+        if amount <= 0:
+            return Response({"error": "Invalid amount"}, status=400)
+
+        try:
+            # 1. Resolve Source Wallet (Must belong to Sender)
+            source = Wallet.objects.get(id=source_id, owner=request.user)
+            
+            if source.balance < amount:
+                return Response({"error": "Insufficient funds"}, status=400)
+
+            dest = None
+            description = ""
+
+            # 2. Resolve Destination (Two Paths)
+            
+            # PATH A: Peer-to-Peer (P2P)
+            if recipient_id:
+                # Normalize identifier (strip spaces)
+                recipient_id = recipient_id.strip()
+                
+                # Find User by Email OR Phone
+                recipient_user = User.objects.filter(
+                    Q(email__iexact=recipient_id) | Q(phone_number=recipient_id)
+                ).first()
+
+                if not recipient_user:
+                    return Response({"error": f"User '{recipient_id}' not found"}, status=404)
+                
+                if recipient_user == request.user:
+                    return Response({"error": "For self-transfers, use the 'Between My Wallets' option"}, status=400)
+
+                # Find their Primary Customer Wallet (or fallback to first found)
+                dest = Wallet.objects.filter(
+                    owner=recipient_user, 
+                    wallet_type=Wallet.Type.CUSTOMER
+                ).order_by('-is_primary', 'created_at').first()
+
+                if not dest:
+                    return Response({"error": "Recipient has no active wallet to receive funds"}, status=400)
+                
+                description = f"Sent to {recipient_user.username} ({recipient_id})"
+
+            # PATH B: Internal Transfer
+            elif dest_id:
+                dest = Wallet.objects.get(id=dest_id, owner=request.user)
+                description = f"Internal: {source.label} -> {dest.label}"
+            
+            else:
+                return Response({"error": "Destination required"}, status=400)
+
+            # 3. Execute Transfer
+            tx = LedgerService.execute_transfer(
+                source_wallet=source, 
+                destination_wallet=dest, 
+                amount=amount, 
+                request_user=request.user,
+                custom_description=description
+            )
+
+            return Response({
+                "status": tx.status,
+                "message": "Transfer successful" if tx.status == 'COMPLETED' else "Transfer pending approval",
+                "reference": tx.reference,
+                "new_balance": source.balance
+            })
+
+        except Wallet.DoesNotExist:
+            return Response({"error": "Source wallet not found"}, status=404)
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+
+# --- 3. EXTERNAL WITHDRAWAL (M-Pesa) ---
 class InitiateWithdrawalView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        # 1. Get Data
-        user = request.user
         amount = Decimal(request.data.get('amount', '0'))
+        source_id = request.data.get('source_wallet_id')
         
-        if amount <= 0:
-            return Response({"error": "Invalid amount"}, status=400)
+        # Optional: Send to someone else (Remittance)
+        recipient = request.data.get('recipient_phone', request.user.phone_number)
 
-        # 2. Get User's Wallet
-        try:
-            # Assuming organizers operate in KES
-            wallet = user.wallets.get(wallet_type=Wallet.Type.ORGANIZER, currency__code='KES')
-        except Wallet.DoesNotExist:
-            return Response({"error": "Wallet not found"}, status=404)
-
-        # 3. Validation (KYC & Balance)
-        # Strict Mode: Uncomment this when you want to enforce KYC
-        # if not user.is_kyc_verified:
-        #     return Response({"error": "Account not verified. Please upload ID."}, status=403)
-
-        if wallet.balance < amount:
-            return Response({"error": "Insufficient funds"}, status=400)
+        # 1. KYC CHECK (Blocking Rule)
+        if not request.user.is_kyc_verified:
+             return Response({
+                 "error": "Identity verification required for withdrawals.",
+                 "code": "KYC_BLOCK"
+             }, status=403)
 
         try:
-            # 4. ATOMIC TRANSACTION (The Magic)
-            # We wrap the Logic + Ledger + M-Pesa Trigger in one block (conceptually)
-            # Note: We actually deduct FIRST, then try to send. If M-Pesa fails, we refund.
+            wallet = Wallet.objects.get(id=source_id, owner=request.user)
             
-            reference = f"WD-{uuid.uuid4().hex[:8].upper()}"
+            # 2. FEE ENGINE
+            fees = FeeService.calculate_withdrawal_fees(amount)
+            total_deduction = fees['total_deduction']
+
+            if wallet.balance < total_deduction:
+                return Response({
+                    "error": f"Insufficient funds. You need KES {total_deduction} (Includes fees)",
+                    "breakdown": fees
+                }, status=400)
             
-            # Prepare Ledger Entries
-            # Debit Organizer Wallet (-), Credit Master Liquidity (+) (Money leaves the system via Master)
-            master_wallet = Wallet.objects.get(wallet_type=Wallet.Type.MASTER_LIQUIDITY, currency__code='KES')
-            
-            entries = [
-                {
-                    'wallet': wallet,
-                    'amount': amount,
-                    'type': LedgerEntry.EntryType.DEBIT # Take from User
-                },
-                {
-                    'wallet': master_wallet,
-                    'amount': amount,
-                    'type': LedgerEntry.EntryType.CREDIT # Return to Master (to be paid out)
-                }
-            ]
+            # 3. CHECK WALLET TYPE RULES
+            # If Organizer Wallet -> It must go to Suspense (Approval)
+            if wallet.wallet_type == Wallet.Type.ORGANIZER:
+                reference = f"WD-ORG-{uuid.uuid4().hex[:8].upper()}"
+                suspense_wallet = Wallet.objects.get(wallet_type=Wallet.Type.SUSPENSE)
+                
+                entries = [
+                    {'wallet': wallet, 'amount': total_deduction, 'type': LedgerEntry.EntryType.DEBIT},
+                    {'wallet': suspense_wallet, 'amount': total_deduction, 'type': LedgerEntry.EntryType.CREDIT}
+                ]
+                
+                LedgerService.process_transaction(
+                    reference=reference,
+                    description=f"Withdrawal Request to {recipient}",
+                    tx_type=Transaction.Type.WITHDRAWAL,
+                    entries=entries,
+                    status=Transaction.Status.PENDING_APPROVAL
+                )
+                return Response({"status": "pending_approval", "message": "Withdrawal pending admin review."})
 
-            # 5. Execute Ledger (This locks the funds immediately)
-            tx = LedgerService.process_transaction(
-                reference=reference,
-                description=f"Withdrawal to {user.phone_number}",
-                tx_type=Transaction.Type.WITHDRAWAL,
-                entries=entries
-            )
+            # 4. INSTANT WITHDRAWAL (Personal Wallet)
+            # Move: User -> Master (Cash Out) + Revenue (Fee)
+            else:
+                reference = f"WD-P-{uuid.uuid4().hex[:8].upper()}"
+                master_wallet = Wallet.objects.get(wallet_type=Wallet.Type.MASTER_LIQUIDITY)
+                revenue_wallet = Wallet.objects.get(wallet_type=Wallet.Type.REVENUE)
+                
+                entries = [
+                    # Debit User Full Amount
+                    {'wallet': wallet, 'amount': total_deduction, 'type': LedgerEntry.EntryType.DEBIT},
+                    
+                    # Credit Master (The Cash sent to user)
+                    {'wallet': master_wallet, 'amount': amount, 'type': LedgerEntry.EntryType.CREDIT},
+                    
+                    # Credit Master (The Network Fee Safaricom took)
+                    {'wallet': master_wallet, 'amount': fees['network_fee'], 'type': LedgerEntry.EntryType.CREDIT},
+                    
+                    # Credit Revenue (Your Profit)
+                    {'wallet': revenue_wallet, 'amount': fees['service_fee'], 'type': LedgerEntry.EntryType.CREDIT},
+                ]
 
-            # 6. Trigger M-Pesa B2C
-            mpesa_ref = MpesaGateway.trigger_b2c(user.phone_number, amount, reference)
-            
-            # Update Transaction with external ref
-            tx.external_reference = mpesa_ref
-            tx.status = Transaction.Status.COMPLETED
-            tx.save()
+                LedgerService.process_transaction(
+                    reference=reference,
+                    description=f"Withdrawal to {recipient}",
+                    tx_type=Transaction.Type.WITHDRAWAL,
+                    entries=entries,
+                    status=Transaction.Status.COMPLETED
+                )
 
-            return Response({
-                "status": "success",
-                "new_balance": wallet.balance,
-                "reference": reference
-            })
+                # TRIGGER M-PESA
+                MpesaGateway.trigger_b2c(recipient, amount, reference)
 
-        except Exception as e:
-            print(f"Withdrawal Error: {e}")
-            return Response({"error": "System Error processing withdrawal"}, status=500)
-        
-
-
-
-
-
-class MyWalletView(APIView):
-    """
-    GET /api/finance/me/
-    Returns the logged-in user's wallet balance and history.
-    """
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request):
-        try:
-            # 1. Get the Wallet (Prioritize Organizer, fallback to Customer)
-            # This handles the "Dual Identity" logic
-            wallet = Wallet.objects.filter(owner=request.user).order_by('wallet_type').first()
-            
-            if not wallet:
-                return Response({"balance": 0, "currency": "KES", "history": []})
-
-            # 2. Calculate Pending (Suspense)
-            pending_amount = LedgerEntry.objects.filter(
-                wallet=wallet,
-                transaction__status__in=[
-                    Transaction.Status.PENDING_APPROVAL, 
-                    Transaction.Status.APPROVED, 
-                    Transaction.Status.ON_HOLD
-                ],
-                entry_type=LedgerEntry.EntryType.DEBIT
-            ).aggregate(Sum('amount'))['amount__sum'] or 0
-
-            # 3. Get History
-            entries = LedgerEntry.objects.filter(wallet=wallet).select_related('transaction').order_by('-created_at')[:10]
-            history = []
-            for entry in entries:
-                tx = entry.transaction
-                sign = 1 if entry.entry_type == LedgerEntry.EntryType.CREDIT else -1
-                history.append({
-                    "id": str(tx.id),
-                    "type": tx.transaction_type,
-                    "amount": float(entry.amount) * sign,
-                    "status": tx.status,
-                    "reference": tx.reference,
-                    "date": entry.created_at.strftime("%Y-%m-%d %H:%M")
+                return Response({
+                    "status": "success", 
+                    "message": f"Successfully sent KES {amount} to {recipient}",
+                    "new_balance": wallet.balance
                 })
 
-            return Response({
-                "balance": wallet.balance,
-                "pending": pending_amount,
-                "currency": wallet.currency.code,
-                "is_frozen": wallet.is_frozen,
-                "wallet_type": wallet.wallet_type, # Useful for UI
-                "history": history
-            })
+        except Wallet.DoesNotExist:
+            return Response({"error": "Wallet not found"}, status=404)
         except Exception as e:
-            return Response({"error": str(e)}, status=400)
+            return Response({"error": str(e)}, status=500)

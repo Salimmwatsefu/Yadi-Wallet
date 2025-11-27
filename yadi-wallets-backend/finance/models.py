@@ -13,16 +13,25 @@ class Currency(models.Model):
 
 class Wallet(models.Model):
     class Type(models.TextChoices):
-        MASTER_LIQUIDITY = 'MASTER', 'Master Liquidity (Physical Bank)'
-        REVENUE = 'REVENUE', 'Yadi Revenue'
-        ORGANIZER = 'ORGANIZER', 'Organizer Wallet'
-        SUSPENSE = 'SUSPENSE', 'Payout Clearing (Suspense)' 
-        CUSTOMER = 'CUSTOMER', 'Customer Wallet'
+        # --- USER WALLETS ---
+        CUSTOMER = 'CUSTOMER', 'Personal Wallet'   # Flexible, instant
+        ORGANIZER = 'ORGANIZER', 'Business Wallet' # Locked, needs approval
+        
+        # --- SYSTEM WALLETS (Internal) ---
+        MASTER_LIQUIDITY = 'MASTER', 'Liquidity Float (Paybill)' # Actual Cash
+        SETTLEMENT = 'SETTLEMENT', 'Settlement (Incoming)'       # Waiting Room
+        REVENUE = 'REVENUE', 'Yadi Revenue (Profit)'             # Your Money
+        SUSPENSE = 'SUSPENSE', 'Suspense (Held Funds)'           # Payout Lock
+        RESERVE = 'RESERVE', 'Reserve (Bank Vault)'              # Safe Storage
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='wallets', null=True, blank=True)
     currency = models.ForeignKey(Currency, on_delete=models.PROTECT)
     wallet_type = models.CharField(max_length=20, choices=Type.choices, default=Type.ORGANIZER)
+
+    # --- Customization ---
+    label = models.CharField(max_length=50, default="Main Wallet")
+    is_primary = models.BooleanField(default=False, help_text="Default wallet for deposits")
     
     # Denormalized Balance (For read speed only. Source of truth is Ledger)
     balance = models.DecimalField(max_digits=20, decimal_places=2, default=Decimal('0.00'))
@@ -37,12 +46,37 @@ class Wallet(models.Model):
 
 
 
+class FeeConfiguration(models.Model):
+    """
+    Allows Admin to configure withdrawal fees without code changes.
+    Example: 0-500 = Free. 501-1000 = 15 KES.
+    """
+    min_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    max_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    
+    # The Fee YOU keep
+    service_fee = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
+    
+    # The Fee SAFARICOM takes (Estimate)
+    network_fee = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
+    
+    def __str__(self):
+        return f"Range {self.min_amount}-{self.max_amount}: Svc {self.service_fee} + Net {self.network_fee}"
+
+    class Meta:
+        ordering = ['min_amount']
+
+
+
+
+
 class Transaction(models.Model):
     class Type(models.TextChoices):
         DEPOSIT = 'DEPOSIT', 'Deposit (M-Pesa)'
         WITHDRAWAL = 'WITHDRAWAL', 'Withdrawal (B2C)'
         TICKET_SALE = 'TICKET_SALE', 'Ticket Sale Split'
         FEE = 'FEE', 'Service Fee'
+        TRANSFER = 'TRANSFER', 'Internal Transfer' #  Wallet-to-Wallet
 
     class Status(models.TextChoices):
         PENDING = 'PENDING', 'Pending'
@@ -62,14 +96,15 @@ class Transaction(models.Model):
     
     created_at = models.DateTimeField(auto_now_add=True)
 
-
+    # Approval Audit Trail
     is_approved = models.BooleanField(default=False)
     approved_at = models.DateTimeField(null=True, blank=True)
-    
-   
     approved_by = models.ForeignKey('users.User', on_delete=models.SET_NULL, null=True, related_name='approved_txs')
-    
     scheduled_release_date = models.DateTimeField(null=True, blank=True)
+
+
+    # External Reference (M-Pesa Receipt)
+    external_reference = models.CharField(max_length=100, blank=True, null=True)
 
 
 

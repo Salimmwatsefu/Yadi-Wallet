@@ -1,0 +1,98 @@
+name: Deploy Yadi Wallet
+
+on:
+  push:
+    branches: [ "main" ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: salimmwatsefu/yadi-wallet
+  DOPPLER_PROJECT: yadi-wallets 
+  DOPPLER_CONFIG: prd          
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Doppler CLI
+        uses: dopplerhq/cli-action@v2
+
+      - name: Log in to Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # --- BUILD FRONTEND ---
+      - name: Build and Push Frontend
+        run: |
+          # 1. Get secrets explicitly for the Wallet Project
+          doppler secrets download --no-file --format env --token ${{ secrets.DOPPLER_TOKEN }} --project ${{ env.DOPPLER_PROJECT }} --config ${{ env.DOPPLER_CONFIG }} > ./yadi-wallets-web/.env
+          
+          # 2. Build the image
+          docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:latest ./yadi-wallets-web
+          
+          # 3. Push
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:latest
+
+      # --- BUILD BACKEND ---
+      - name: Build and Push Backend
+        run: |
+          docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend:latest ./yadi-wallets-backend
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend:latest
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # Copy docker-compose to server
+      - name: Copy Config
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DROPLET_IP }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "docker-compose.yml"
+          target: "/opt/yadi-wallet"
+          strip_components: 0
+          overwrite: true
+
+      # SSH and Run
+      - name: Deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DROPLET_IP }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            # Login to Registry
+            echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            
+            cd /opt/yadi-wallet
+            
+            # Get Runtime secrets explicitly for Wallet Project
+            export DOPPLER_TOKEN=${{ secrets.DOPPLER_TOKEN }}
+            doppler secrets download --no-file --format docker --project ${{ env.DOPPLER_PROJECT }} --config ${{ env.DOPPLER_CONFIG }} > .env
+            
+            # Pull new images
+            docker compose pull
+            
+            # Restart services
+            docker compose up -d --remove-orphans
+            
+            # Run Migrations & Collect Static
+            docker compose exec -T backend python manage.py migrate
+            docker compose exec -T backend python manage.py collectstatic --noinput
+            
+            # Cleanup old images
+            docker system prune -f
