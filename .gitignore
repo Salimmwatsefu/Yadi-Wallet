@@ -1,0 +1,31 @@
+--- Global Environments & Dependency Folders ---
+
+.env
+.venv/
+node_modules/
+
+Ignore contents of core folders, but keep the folders themselves.
+
+  
+
+/yadi-wallets-backend/.venv/
+/yadi-wallets-web/node_modules/
+/yadi-wallets-web/dist/
+
+--- Delegated Ignores ---
+
+/yadi-wallets-backend/.gitignore
+/yadi-wallets-web/.gitignore
+
+--- Global Artifacts ---
+
+*.sqlite3
+db.sqlite3
+/media/
+
+--- IDE/OS Files ---
+
+.idea/
+.vscode/
+Thumbs.db
+.DS_Store

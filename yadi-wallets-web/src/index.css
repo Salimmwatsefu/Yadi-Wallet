@@ -1,0 +1,272 @@
+@import "tailwindcss";
+
+
+@layer base {
+  :root {
+    /* ... existing vars ... */
+    --glass-surface-heavy: rgba(15, 15, 15, 0.85); /* Darker glass for the main card */
+  }
+}
+
+/* --- THEME CONFIGURATION (Tailwind v4) --- */
+@theme {
+  /* 1. Typography (SHARED DNA - Keep same as Tickets) */
+  --font-sans: 'Inter', sans-serif;
+  --font-heading: 'Outfit', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* 2. The "Void Black" Palette (SHARED DNA) */
+  --color-background: #09090b; /* Zinc 950 */
+  --color-surface: #18181b;    /* Zinc 900 */
+  --color-surface-highlight: #27272a; /* Zinc 800 */
+
+  /* 3. Brand Colors (DISTINCT - The Wallet Identity) */
+  /* Swapped Pink for "Jeton Amber" */
+  --color-primary: #FF6D00;       /* Electric Amber */
+  --color-primary-hover: #FF9100; /* Solar Orange */
+  
+  /* Secondary remains Violet or Blue for tech feel */
+  --color-secondary: #8b5cf6;     /* Violet 500 */
+  
+  --color-success: #10B981;       /* M-Pesa Green */
+  --color-destructive: #EF4444;   /* Red 500 */
+  
+  /* Jeton Gradients */
+  --color-crimson: #D90429;
+  --color-gold: #FF9F1C;
+
+  /* 4. Custom Shadows */
+  /* Amber Glow instead of Pink Glow */
+  --shadow-neon: 0 0 20px rgba(255, 109, 0, 0.4); 
+  --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  
+  /* 5. Animations */
+  --animate-fade-in: fadeIn 0.5s ease-out;
+  --animate-slide-up: slideUp 0.5s ease-out;
+}
+
+/* --- STANDARD CSS RESETS --- */
+body {
+  background-color: var(--color-background);
+  color: #ffffff;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  /* Shared "Void" Gradient for depth */
+  background-image: radial-gradient(circle at 50% -20%, #27272a 0%, #09090b 60%);
+  min-height: 100vh;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+}
+
+/* --- UTILITIES (Gradients) --- */
+.bg-amber-gradient {
+  background: linear-gradient(135deg, #FF512F 0%, #F09819 100%);
+}
+
+/* --- GLASS UTILITIES (For the Ultra Modern Components) --- */
+.glass-card {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid rgba(255, 255, 255, 0.15); /* Top Highlight */
+  border-radius: 1.5rem; /* Matches Ticket App roundedness */
+  transition: all 0.3s ease;
+}
+
+.glass-card:hover {
+  border-color: rgba(255, 109, 0, 0.3); /* Amber tint on hover */
+  transform: translateY(-2px);
+  box-shadow: 0 20px 40px -10px rgba(0,0,0,0.8);
+}
+
+/* The "Jeton" Landing Page Gradient */
+.bg-jeton-gradient {
+  background: linear-gradient(135deg, #FF512F 0%, #F09819 100%);
+  min-height: 100vh;
+  color: white;
+}
+
+/* Texture Overlay (Optional - adds premium grain) */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 50;
+  mix-blend-mode: overlay;
+}
+
+/* --- SCROLLBAR (Consistent with Tickets) --- */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-surface);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-surface-highlight);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3f3f46;
+}
+
+/* =========================================
+   NEW ADDITIONS (For Holo Wallet & Landing)
+   ========================================= */
+
+/* 1. Ultra Gloss (The "HoloWallet" look) */
+.ultra-glass {
+  background: linear-gradient(145deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.01) 100%);
+  backdrop-filter: blur(30px);
+  -webkit-backdrop-filter: blur(30px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid rgba(255, 255, 255, 0.15); /* Sharp top edge */
+  box-shadow: 
+    0 25px 50px -12px rgba(0, 0, 0, 0.5),
+    inset 0 0 30px rgba(0,0,0,0.2); /* Inner depth */
+}
+
+/* 2. Floating Pill (Bottom Nav) */
+.glass-pill {
+  background: rgba(15, 15, 15, 0.8);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 20px 50px -10px rgba(0,0,0,0.8);
+}
+
+/* 3. Glass Button (Secondary Actions) */
+.btn-glass {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+}
+
+.btn-glass:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+}
+
+/* 4. Amber Button (Primary Call to Action) */
+.btn-amber {
+  background-color: var(--color-primary);
+  color: white;
+  font-weight: 700;
+  border-radius: 9999px; 
+  transition: all 0.2s;
+  box-shadow: 0 0 20px rgba(255, 109, 0, 0.4);
+}
+
+.btn-amber:hover {
+  background-color: var(--color-primary-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 25px -5px rgba(255, 109, 0, 0.3);
+}
+
+
+.obsidian-card {
+  background: linear-gradient(145deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%);
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 2rem;
+  box-shadow: 
+    0 30px 60px -10px rgba(0, 0, 0, 0.8),
+    inset 0 0 40px rgba(0,0,0,0.5);
+  position: relative;
+  overflow: hidden;
+}
+
+/* 2. The Internal Action Button (Glass w/ Hover) */
+.btn-glass-action {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: white;
+  font-weight: 700;
+  border-radius: 1rem;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(10px);
+}
+.btn-glass-action:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: var(--color-primary); /* Amber Border on Hover */
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px -5px rgba(0,0,0,0.5);
+}
+
+/* 3. The Dropdown Pill */
+.context-pill {
+  background: #111;
+  border: 1px solid #222;
+  color: white;
+  border-radius: 100px;
+  transition: all 0.2s;
+}
+.context-pill:hover {
+  border-color: #444;
+  background: #1a1a1a;
+}
+
+
+.hero-card-light {
+  /* Bright White with subtle Amber tint */
+  background: linear-gradient(135deg, #FFFFFF 0%, #FFF7ED 100%);
+  
+  /* Inner glow for depth */
+  box-shadow: 
+    0 20px 50px -10px rgba(0, 0, 0, 0.5), /* Drop Shadow */
+    0 0 0 1px rgba(255, 255, 255, 0.5) inset, /* Inner White Rim */
+    0 0 40px rgba(255, 85, 0, 0.15); /* Amber Glow */
+    
+  border-radius: 2rem;
+  position: relative;
+  overflow: hidden;
+  color: black; /* Force dark text inside */
+}
+
+.hero-card-light .label {
+  color: #71717A; /* Zinc 500 */
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.hero-card-light .value {
+  color: #09090b; /* Zinc 950 */
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* Internal Button for Light Card (Dark Button on Light Card) */
+.btn-light-card-action {
+  background: #000000;
+  color: white;
+  border-radius: 1rem;
+  font-weight: 700;
+  transition: transform 0.2s;
+}
+.btn-light-card-action:hover {
+  transform: scale(1.05);
+  background: #1a1a1a;
+}
+
+.btn-light-card-secondary {
+  background: white;
+  border: 1px solid #e4e4e7;
+  color: black;
+  border-radius: 1rem;
+  font-weight: 700;
+  transition: background 0.2s;
+}
+.btn-light-card-secondary:hover {
+  background: #f4f4f5;
+}
