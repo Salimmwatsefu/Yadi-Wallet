@@ -22,3 +22,4 @@ urllib3==2.5.0
 gunicorn
 celery
 redis
+dj-database-url
