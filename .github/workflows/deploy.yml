@@ -7,8 +7,6 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: salimmwatsefu/yadi-wallet
-  DOPPLER_PROJECT: yadi-wallet
-  DOPPLER_CONFIG: prd          
 
 jobs:
   build-and-push:
@@ -34,7 +32,7 @@ jobs:
       - name: Build and Push Frontend
         run: |
           # 1. Get secrets explicitly for the Wallet Project
-          doppler secrets download --no-file --format env --token ${{ secrets.DOPPLER_TOKEN }} --project ${{ env.DOPPLER_PROJECT }} --config ${{ env.DOPPLER_CONFIG }} > ./yadi-wallets-web/.env
+          doppler secrets download --no-file --format env --token ${{ secrets.DOPPLER_TOKEN }} > ./yadi-wallets-web/.env
           
           # 2. Build the image
           docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:latest ./yadi-wallets-web
@@ -88,7 +86,7 @@ jobs:
             
             # Get Runtime secrets explicitly for Wallet Project
             export DOPPLER_TOKEN=${{ secrets.DOPPLER_TOKEN }}
-            doppler secrets download --no-file --format docker --project ${{ env.DOPPLER_PROJECT }} --config ${{ env.DOPPLER_CONFIG }} > .env
+            doppler secrets download --no-file --format docker > .env
             
             # Pull new images
             docker compose pull
