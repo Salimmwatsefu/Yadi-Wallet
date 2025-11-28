@@ -8,6 +8,7 @@ from .services import LedgerService, FeeService
 from integrations.mpesa import MpesaGateway
 from users.models import User
 import uuid
+from rest_framework.pagination import PageNumberPagination
 
 # --- 1. WALLET MANAGEMENT (Create & List) ---
 class WalletManagementView(APIView):
@@ -233,3 +234,57 @@ class InitiateWithdrawalView(APIView):
             return Response({"error": "Wallet not found"}, status=404)
         except Exception as e:
             return Response({"error": str(e)}, status=500)
+        
+
+
+
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+# --- NEW: Transaction History View (Paginated) ---
+class TransactionHistoryView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    pagination_class = StandardResultsSetPagination
+
+    def get(self, request):
+        # Get all wallets for user
+        wallets = Wallet.objects.filter(owner=request.user)
+        
+        # Get ALL entries (Removed exclude filter)
+        # Ordered by newest first
+        queryset = LedgerEntry.objects.filter(
+            wallet__in=wallets
+        ).select_related('transaction', 'wallet').order_by('-created_at')
+        
+        # Apply Pagination
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(queryset, request)
+        
+        if page is not None:
+            data = self.serialize_entries(page)
+            return paginator.get_paginated_response(data)
+
+        # Fallback if pagination fails (shouldn't happen with correct setup)
+        data = self.serialize_entries(queryset)
+        return Response(data)
+
+    def serialize_entries(self, entries):
+        history = []
+        for entry in entries:
+            tx = entry.transaction
+            # If Debit, show negative. If Credit, show positive.
+            sign = -1 if entry.entry_type == LedgerEntry.EntryType.DEBIT else 1
+            
+            history.append({
+                "id": str(tx.id),
+                "type": tx.transaction_type,
+                "amount": float(entry.amount) * sign,
+                "status": tx.status,
+                "reference": tx.reference,
+                "description": tx.description,
+                "date": entry.created_at.strftime("%Y-%m-%d %H:%M"),
+                "wallet_label": entry.wallet.label
+            })
+        return history

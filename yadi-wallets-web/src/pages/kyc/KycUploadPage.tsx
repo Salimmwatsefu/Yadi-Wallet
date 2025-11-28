@@ -1,16 +1,13 @@
-// ... existing code ...
-// No major code changes needed here if we keep the "Manual OTP" option as fallback.
-// Just updating the text to mention the link.
-
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Shield, Loader2, CheckCircle, Smartphone, Mail, ArrowRight } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { Shield, Loader2, CheckCircle, Smartphone, Mail, ArrowRight, X } from 'lucide-react';
 import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const KycUploadPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, checkAuth } = useAuth();
   
   const [step, setStep] = useState<'input' | 'otp' | 'success'>('input');
@@ -19,14 +16,15 @@ const KycUploadPage = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Redirect if not logged in
+  // Check if this user came from the Magic Link flow
+  const isMagicUser = location.state?.fromMagicLink;
+
   useEffect(() => {
       if (!user) navigate('/login');
       if (user?.is_kyc_verified) setStep('success');
       if (user?.phone_number) setPhoneNumber(user.phone_number);
   }, [user, navigate]);
 
-  // Step 1: Send OTP & Link
   const handleSendOtp = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!phoneNumber) return;
@@ -36,13 +34,12 @@ const KycUploadPage = () => {
           await api.post('/api/users/verify/send-otp/', { phone_number: phoneNumber });
           setStep('otp');
       } catch (err: any) {
-          setError(err.response?.data?.error || "Failed to send code. Try again.");
+          setError(err.response?.data?.error || "Failed to send code.");
       } finally {
           setLoading(false);
       }
   };
 
-  // Step 2: Confirm OTP (Manual Fallback)
   const handleVerifyOtp = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!otp) return;
@@ -59,23 +56,53 @@ const KycUploadPage = () => {
       }
   };
 
-  if (step === 'success') return (
-      <div className="min-h-[80vh] flex flex-col items-center justify-center text-center px-6 animate-in fade-in zoom-in duration-500">
-          <div className="w-24 h-24 bg-green-500/10 rounded-full flex items-center justify-center text-green-500 mb-6 border border-green-500/20 shadow-[0_0_40px_rgba(16,185,129,0.2)]">
-              <CheckCircle className="w-12 h-12" />
+  if (step === 'success') {
+      // --- SCENARIO A: MAGIC LINK USER (Ends Here) ---
+      if (isMagicUser) {
+          return (
+            <div className="min-h-[80vh] flex flex-col items-center justify-center text-center px-6 animate-in fade-in zoom-in duration-500">
+                <div className="w-24 h-24 bg-green-500/10 rounded-full flex items-center justify-center text-green-500 mb-6 border border-green-500/20">
+                    <CheckCircle className="w-12 h-12" />
+                </div>
+                <h2 className="text-3xl font-heading font-bold text-white mb-2">Setup Complete</h2>
+                <p className="text-zinc-400 max-w-sm mx-auto mb-8 leading-relaxed">
+                    Your Organizer Wallet is secure. You can now return to the Ticket App or close this window.
+                </p>
+                <button 
+                    onClick={() => window.close()} // Try to close tab
+                    className="px-8 py-3 bg-white/10 hover:bg-white/20 text-white rounded-full font-bold transition-colors"
+                >
+                    Close Window
+                </button>
+                <button 
+                    onClick={() => navigate('/dashboard')}
+                    className="mt-4 text-sm text-zinc-500 hover:text-white underline"
+                >
+                    Or go to Wallet Dashboard
+                </button>
+            </div>
+          );
+      }
+
+      // --- SCENARIO B: NORMAL USER (Goes to Dashboard) ---
+      return (
+          <div className="min-h-[80vh] flex flex-col items-center justify-center text-center px-6 animate-in fade-in zoom-in duration-500">
+              <div className="w-24 h-24 bg-green-500/10 rounded-full flex items-center justify-center text-green-500 mb-6 border border-green-500/20">
+                  <CheckCircle className="w-12 h-12" />
+              </div>
+              <h2 className="text-3xl font-heading font-bold text-white mb-2">Verified!</h2>
+              <p className="text-zinc-400 max-w-sm mx-auto mb-8 leading-relaxed">
+                  You now have full access to withdrawals.
+              </p>
+              <button 
+                onClick={() => navigate('/dashboard')} 
+                className="px-8 py-3 bg-white text-black hover:bg-zinc-200 rounded-full font-bold transition-colors flex items-center gap-2"
+              >
+                  Go to Dashboard <ArrowRight className="w-4 h-4" />
+              </button>
           </div>
-          <h2 className="text-3xl font-heading font-bold text-white mb-2">Account Verified</h2>
-          <p className="text-zinc-400 max-w-sm mx-auto mb-8 leading-relaxed">
-              Your identity has been confirmed. You now have full access to withdrawals and transfers.
-          </p>
-          <button 
-            onClick={() => navigate('/dashboard')} 
-            className="px-8 py-3 bg-white text-black hover:bg-zinc-200 rounded-full font-bold transition-colors flex items-center gap-2"
-          >
-              Go to Dashboard <ArrowRight className="w-4 h-4" />
-          </button>
-      </div>
-  );
+      );
+  }
 
   return (
     <div className="py-12 max-w-lg mx-auto">
@@ -83,13 +110,22 @@ const KycUploadPage = () => {
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#FF5500]/10 border border-[#FF5500]/20 text-[#FF5500] text-[10px] font-bold uppercase tracking-wider mb-4">
                 <Shield className="w-3 h-3" /> Security Check
             </div>
-            <h1 className="text-3xl font-heading font-bold text-white">Verify Account</h1>
+            <h1 className="text-3xl font-heading font-bold text-white">
+                {isMagicUser ? "Secure Your Organizer Account" : "Verify Account"}
+            </h1>
             <p className="text-zinc-500 mt-2">
                 {step === 'input' ? 'Confirm your contact details to unlock features.' : `Check your email (${user?.email})`}
             </p>
         </div>
 
         <div className="glass-card p-8 bg-[#09090B] border border-white/10 relative overflow-hidden">
+            {/* If Normal User, allow exiting back to dashboard */}
+            {!isMagicUser && (
+                <button onClick={() => navigate('/dashboard')} className="absolute top-4 right-4 text-zinc-600 hover:text-white">
+                    <X size={20} />
+                </button>
+            )}
+
             <AnimatePresence mode="wait">
                 
                 {/* STEP 1: INPUT PHONE */}
@@ -138,7 +174,7 @@ const KycUploadPage = () => {
                     >
                         <div className="text-center mb-4">
                             <p className="text-sm text-white font-bold">Email Sent!</p>
-                            <p className="text-xs text-zinc-500 mt-1">Click the link in your email, or enter the code below.</p>
+                            <p className="text-xs text-zinc-500 mt-1">Check your email and enter the code you received below.</p>
                         </div>
 
                         <div className="space-y-2">

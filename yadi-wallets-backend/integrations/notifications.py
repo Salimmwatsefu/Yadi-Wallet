@@ -127,20 +127,18 @@ class NotificationService:
 
     @staticmethod
     def send_email(to_email, subject, html_content, text_content=None):
-        """
-        Sends Email via Brevo (Sendinblue).
-        """
-        if not to_email:
-            return False
-
-        # Mock Mode for Email
-        if settings.DEBUG and getattr(settings, 'EMAIL_PROVIDER', 'MOCK') == 'MOCK': 
+        # 1. MOCK MODE (Dev) 
+        if settings.DEBUG: 
              print(f"\n📧 [MOCK EMAIL] ------------------------------")
-             print(f"To: {to_email} | Subject: {subject}")
+             print(f"To: {to_email}")
+             print(f"Subject: {subject}")
+             print(f"Body: {text_content if text_content else html_content}")
              print(f"----------------------------------------------\n")
              return True
         
-        # Real Brevo Logic
+        # 2. REAL MODE (Prod)
+        if not to_email: return False
+        
         url = "https://api.brevo.com/v3/smtp/email"
         headers = {
             "accept": "application/json",
@@ -162,5 +160,5 @@ class NotificationService:
             res.raise_for_status()
             return True
         except Exception as e:
-            logger.error(f"Brevo Email Failed: {e}")
+            logger.error(f"Email Failed: {e}")
             return False

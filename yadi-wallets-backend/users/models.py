@@ -1,10 +1,10 @@
-from datetime import timezone
-from decimal import Decimal
-import random
-import string
 import uuid
 from django.db import models
 from django.contrib.auth.models import AbstractUser
+from django.utils import timezone 
+from decimal import Decimal
+import random
+import string
 
 class User(AbstractUser):
     """
@@ -51,7 +51,7 @@ class User(AbstractUser):
     def generate_otp(self):
         code = ''.join(random.choices(string.digits, k=6))
         self.otp_code = code
-        self.otp_created_at = timezone.now()
+        self.otp_created_at = timezone.now() 
         self.save()
         return code
 

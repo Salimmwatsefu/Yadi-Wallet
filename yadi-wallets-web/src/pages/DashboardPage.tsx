@@ -21,6 +21,15 @@ interface WalletType {
     wallet_type: string;
 }
 
+interface HistoryItem {
+    id: string;
+    type: string;
+    amount: number;
+    status: string;
+    date: string;
+    wallet_label?: string;
+}
+
 const DashboardPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -28,7 +37,7 @@ const DashboardPage = () => {
   // Data State
   const [businessWallets, setBusinessWallets] = useState<WalletType[]>([]);
   const [personalWallets, setPersonalWallets] = useState<WalletType[]>([]);
-  const [history, setHistory] = useState<any[]>([]);
+  const [history, setHistory] = useState<HistoryItem[]>([]); 
   const [loading, setLoading] = useState(true);
   
   // UI State
@@ -65,8 +74,17 @@ const DashboardPage = () => {
         setBusinessWallets(walletRes.data.business_wallets);
         setPersonalWallets(walletRes.data.personal_wallets);
 
-        const historyRes = await api.get('/api/finance/me/'); 
-        setHistory(historyRes.data.history || []);
+
+        const historyRes = await api.get('/api/finance/history/'); 
+        const historyData = historyRes.data.results ? historyRes.data.results : historyRes.data;
+        
+        if (Array.isArray(historyData)) {
+            setHistory(historyData);
+        } else {
+            console.error("Unexpected history data format:", historyData);
+            setHistory([]); 
+        }
+
     } catch (err) {
         console.error(err);
     } finally {
@@ -195,12 +213,12 @@ const DashboardPage = () => {
   const AddWalletCard = () => (
       <button 
         onClick={() => setModalType('create')}
-        className="min-w-[80px] h-[210px] rounded-[2rem] border-2 border-dashed border-white/10 flex flex-col items-center justify-center gap-3 hover:border-[#FF5500]/50 hover:bg-[#FF5500]/5 transition-all group"
+        className="min-w-[80px] h-[210px] rounded-[2rem] border-2 border-dashed border-white/40 flex flex-col items-center  gap-3 hover:border-[#FF5500]/50 hover:bg-[#FF5500]/5 transition-all group"
       >
-          <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-zinc-500 group-hover:text-[#FF5500] transition-colors">
+          <div className="w-10 h-10 rounded-full bg-white/5 flex mt-10 justify-center mb-3 text-zinc-500 group-hover:text-[#FF5500] transition-colors">
               <Plus size={20} />
           </div>
-          <span className="text-[10px] font-bold text-zinc-500 uppercase rotate-90 whitespace-nowrap group-hover:text-white">New Vault</span>
+          <span className="text-[10px] font-bold text-zinc-500 uppercase rotate-90 whitespace-nowrap group-hover:text-white">Create Wallet</span>
       </button>
   );
 
@@ -212,12 +230,9 @@ const DashboardPage = () => {
         {/* Header */}
         <header className="flex justify-between items-center mb-8">
             <div>
-                <h1 className="text-3xl font-heading font-bold">My Vaults</h1>
-                <p className="text-zinc-500 text-sm">Manage your cash flow.</p>
+                <h1 className="text-3xl font-heading font-bold">My Wallets</h1>
+                <p className="text-zinc-500 text-sm">Your wallet, your world, Hello {user.username}</p>
             </div>
-            <button className="p-3 bg-white/5 rounded-full hover:bg-white/10 transition-colors">
-                <Bell size={20} />
-            </button>
         </header>
 
         {/* --- KYC WARNING BANNER --- */}
@@ -293,8 +308,9 @@ const DashboardPage = () => {
                     <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Personal & Goals</h3>
                 </div>
                 <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
-                    {personalWallets.map(w => <WalletCard key={w.id} wallet={w} type="personal" />)}
                     <AddWalletCard />
+                    {personalWallets.map(w => <WalletCard key={w.id} wallet={w} type="personal" />)}
+                    
                 </div>
             </section>
 

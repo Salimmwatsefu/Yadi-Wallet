@@ -29,3 +29,9 @@ db.sqlite3
 .vscode/
 Thumbs.db
 .DS_Store
+
+
+.env.production
+.env.production
+
+backup.bundle

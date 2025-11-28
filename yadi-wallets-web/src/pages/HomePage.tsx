@@ -31,7 +31,7 @@ const HomePage = () => {
                     Log In
                 </button>
                 <button 
-                    onClick={() => navigate('/login')} 
+                    onClick={() => navigate('/register')} 
                     className="bg-white text-black px-5 py-2.5 rounded-full text-sm font-bold hover:bg-zinc-200 transition-all shadow-lg"
                 >
                     Get Started

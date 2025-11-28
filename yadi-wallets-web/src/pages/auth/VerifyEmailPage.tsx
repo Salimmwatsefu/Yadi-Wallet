@@ -38,7 +38,7 @@ const VerifyEmailPage = () => {
         {status === 'verifying' && (
             <div className="flex flex-col items-center animate-pulse">
                 <Loader2 className="w-12 h-12 text-[#FF5500] animate-spin mb-4" />
-                <h2 className="text-xl font-bold text-white">Verifying Link...</h2>
+                <h2 className="text-xl font-bold text-white">Verifying ...</h2>
             </div>
         )}
 
@@ -56,7 +56,7 @@ const VerifyEmailPage = () => {
             <div className="flex flex-col items-center">
                 <XCircle className="w-16 h-16 text-red-500 mb-4" />
                 <h2 className="text-xl font-bold text-white">Verification Failed</h2>
-                <p className="text-zinc-500 mt-2 mb-6">This link is invalid or has expired.</p>
+                <p className="text-zinc-500 mt-2 mb-6">Invalid code</p>
                 <button 
                     onClick={() => navigate('/login')} 
                     className="px-6 py-3 bg-white/10 hover:bg-white/20 rounded-xl text-white font-bold transition-colors"
