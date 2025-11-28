@@ -25,6 +25,9 @@ services:
     networks:
       - app_network
 
+
+  
+
   # 3. Redis (Message Broker for Celery)
   redis:
     image: redis:7-alpine
