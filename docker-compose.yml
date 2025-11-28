@@ -35,14 +35,14 @@ services:
   # 4. Backend (Django API)
   backend:
     image: ghcr.io/salimmwatsefu/yadi-wallet-backend:latest
-    command: gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 2
+    command: gunicorn config.wsgi:application --bind 0.0.0.0:8001 --workers 2
     env_file:
       - .env
     volumes:
       - static_volume:/app/staticfiles
       - media_volume:/app/media
     expose:
-      - 8000
+      - 8001
     environment:
       - SECRET_KEY=${SECRET_KEY}
       - DEBUG=False
