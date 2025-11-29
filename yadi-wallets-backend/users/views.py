@@ -66,6 +66,8 @@ class ExchangeMagicTokenView(APIView):
                 
             # 4. Login (Create Session)
             # Use request._request to ensure compatibility with DRF
+            user.backend = 'django.contrib.auth.backends.ModelBackend'
+            
             login(request, user)
             
             return Response({
