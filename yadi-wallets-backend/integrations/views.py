@@ -26,7 +26,8 @@ from decouple import config
 from django.core.paginator import Paginator
 
 def send_webhook_notification(reference, status):
-    webhook_url = "http://localhost:8000/api/webhooks/payment/"
+    base_url = config('TICKETS_SERVICE_URL', default="http://localhost:8000")
+    webhook_url = f"{base_url}/api/webhooks/payment/"
     
     # 1. Prepare the payload
     payload = {"reference": reference, "status": status}
